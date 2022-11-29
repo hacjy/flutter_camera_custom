@@ -1,4 +1,4 @@
-##Flutter Camera Custom:
+## Flutter Camera Custom:
 - 实现圆形拍照预览页UI；
 - 处理前置摄像头图片翻转问题；
 - 监听app生命周期；
