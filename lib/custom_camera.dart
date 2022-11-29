@@ -1,13 +1,14 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:camera/camera.dart';
 import 'package:image/image.dart' as img;
 
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_image/flutter_native_image.dart';
 import 'package:image_editor/image_editor.dart';
-import 'package:path_provider/path_provider.dart';
+
+import 'custom_camera_controller.dart' as CameraCtrl;
 
 class CustomCamera extends StatefulWidget {
   @override
@@ -16,18 +17,23 @@ class CustomCamera extends StatefulWidget {
 
 class _CustomCameraState extends State<CustomCamera>
     with WidgetsBindingObserver {
-  CameraController? controller;
+  CameraCtrl.CameraController? controller;
   List<CameraDescription> cameras = [];
   String filePath = '';
   final int cameraDirection = 1;
   double width = 200;
   double height = 200;
 
-  void _camera() async {
-    cameras = await availableCameras();
-    if (cameras.isNotEmpty && cameras.length >= 2) {
-      controller = CameraController(
-          cameras[cameraDirection], ResolutionPreset.high,
+  void _camera({bool init = false, bool isDisposed = false}) async {
+    if (isDisposed) {
+      disposeCamera();
+    }
+    if (init) {
+      cameras = await availableCameras();
+    }
+    if (cameras.isNotEmpty) {
+      controller = CameraCtrl.CameraController(
+          cameras[cameraDirection], ResolutionPreset.medium,
           imageFormatGroup: ImageFormatGroup.jpeg);
       controller!.initialize().then((_) {
         if (!mounted) {
@@ -38,18 +44,26 @@ class _CustomCameraState extends State<CustomCamera>
     }
   }
 
+  void disposeCamera() {
+    if (controller != null) {
+      controller?.dispose();
+    }
+  }
+
   @override
   void initState() {
+    print('initState');
     // 添加监听器。生命周期变化，会回调到didChangeAppLifecycleState方法。
     WidgetsBinding.instance.addObserver(this);
     super.initState();
-    _camera();
+    _camera(init: true);
   }
 
   @override
   void dispose() {
-    controller?.dispose();
+    print('dispose');
     WidgetsBinding.instance.removeObserver(this);
+    disposeCamera();
     super.dispose();
   }
 
@@ -57,16 +71,31 @@ class _CustomCameraState extends State<CustomCamera>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    print('state = $state');
-    if (state == AppLifecycleState.paused) {
-      print("app进入后台：paused");
-      controller?.pausePreview();
-    } else if (state == AppLifecycleState.resumed) {
+    if (state == AppLifecycleState.resumed) {
       print("app进入前台：resumed");
-      controller?.resumePreview();
+      pauseAndResumed(false);
     } else if (state == AppLifecycleState.inactive) {
       // 不常用：应用程序处于非活动状态，并且为接收用户输入时调用，比如：来电话了。
-      print("app inactive");
+      print("app处于非活动状态：inactive");
+      pauseAndResumed(true);
+    }
+  }
+
+  void pauseAndResumed(bool isPause) {
+    try {
+      bool ret = controller?.isDisposed ?? false;
+      print('isDisposed=${ret}');
+      if (ret) {
+        _camera(isDisposed: ret);
+        return;
+      }
+      if (isPause) {
+        controller?.pausePreview();
+      } else {
+        controller?.resumePreview();
+      }
+    } catch (e) {
+      print(e);
     }
   }
 
@@ -74,10 +103,8 @@ class _CustomCameraState extends State<CustomCamera>
   Widget build(BuildContext context) {
     return Scaffold(
         body: cameras.isEmpty || controller == null
-            ? Container(
-                child: Center(
-                  child: Text("loading..."),
-                ),
+            ? const Center(
+                child: CircularProgressIndicator(),
               )
             : Center(
                 child: Column(
@@ -120,6 +147,17 @@ class _CustomCameraState extends State<CustomCamera>
               ));
   }
 
+  Widget imageView(){
+    return Container(
+        alignment: Alignment.center,
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: Colors.black54,
+            shape: BoxShape.circle,),
+        child: ClipOval());
+  }
+
   Widget _cameraScan() {
     return Container(
       width: width,
@@ -142,9 +180,9 @@ class _CustomCameraState extends State<CustomCamera>
           decoration: BoxDecoration(shape: BoxShape.circle),
           child: AspectRatio(
               aspectRatio: 1,
-              child: CameraPreview(
-                controller!,
-              ))),
+              child: (controller?.isInitialized ?? false) == true
+                  ? controller!.buildPreview()
+                  : imageView())),
     );
   }
 
@@ -161,7 +199,9 @@ class _CustomCameraState extends State<CustomCamera>
   }
 
   Future<String> takePicture() async {
-    if (controller == null) return "";
+    if (controller == null) {
+      return "";
+    }
     if (!controller!.value.isInitialized) {
       return "";
     }
@@ -182,8 +222,9 @@ class _CustomCameraState extends State<CustomCamera>
       if (cameras[cameraDirection].lensDirection == CameraLensDirection.front) {
         /// 前置摄像头处理，后置摄像头一般不会出现问题
         ImageEditorOption option = ImageEditorOption();
+
         /// 翻转配置
-        option.addOption(FlipOption(horizontal: true));
+        option.addOption(const FlipOption(horizontal: true));
         bytes = await ImageEditor.editImage(
             image: bytes!, imageEditorOption: option);
 
