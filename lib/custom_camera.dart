@@ -147,14 +147,15 @@ class _CustomCameraState extends State<CustomCamera>
               ));
   }
 
-  Widget imageView(){
+  Widget imageView() {
     return Container(
         alignment: Alignment.center,
         width: width,
         height: height,
         decoration: BoxDecoration(
           color: Colors.black54,
-            shape: BoxShape.circle,),
+          shape: BoxShape.circle,
+        ),
         child: ClipOval());
   }
 
@@ -172,17 +173,26 @@ class _CustomCameraState extends State<CustomCamera>
   }
 
   Widget _cameraPreviewWidget() {
+    final size = MediaQuery.of(context).size;
+    final deviceRatio = size.height / size.width;
+
     return ClipOval(
-      child: Container(
-          width: width,
-          height: height,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(shape: BoxShape.circle),
-          child: AspectRatio(
-              aspectRatio: 1,
+        child: Container(
+      width: width,
+      height: height,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(shape: BoxShape.circle),
+      child:
+          //Transform.scale 比例缩放预览图，拍照出来的图片比较准确
+      Transform.scale(
+          scale: controller!.value.aspectRatio ,
+          child:
+            AspectRatio(
+              aspectRatio: controller!.value.aspectRatio / deviceRatio,
               child: (controller?.isInitialized ?? false) == true
                   ? controller!.buildPreview()
                   : imageView())),
+    )
     );
   }
 
